@@ -973,14 +973,32 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     const { x, y } = getTouchPos(t);
-    if (x < W / 2) {
-      touchState.joy = { id: t.identifier, startX: x, startY: y, curX: x, curY: y };
-    } else {
-      touchState.aim = { id: t.identifier };
-      mouse.x = x; mouse.y = y; mouse.down = true;
+
+    if (gameState === 'MENU') {
+      gameState = 'PLAYING'; spawnWave(wave); continue;
+    }
+    if (gameState === 'GAME_OVER') {
+      resetGame(); continue;
+    }
+    if (gameState === 'LEVEL_UP') {
+      const cardW = 220, cardH = 140, gap = 18;
+      const startX = (W - (cardW * 3 + gap * 2)) / 2;
+      for (let i = 0; i < levelUpChoices.length; i++) {
+        const cx = startX + i * (cardW + gap);
+        const cy = H / 2 - cardH / 2 + 10;
+        if (x >= cx && x <= cx + cardW && y >= cy && y <= cy + cardH) { applyUpgrade(i); break; }
+      }
+      continue;
+    }
+    if (gameState === 'PLAYING') {
+      if (x < W / 2) {
+        touchState.joy = { id: t.identifier, startX: x, startY: y, curX: x, curY: y };
+      } else {
+        touchState.aim = { id: t.identifier };
+        mouse.x = x; mouse.y = y; mouse.down = true;
+      }
     }
   }
-  if (gameState === 'MENU') { gameState = 'PLAYING'; spawnWave(wave); }
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
@@ -1008,13 +1026,15 @@ canvas.addEventListener('touchcancel', e => {
   touchState.joy = null; touchState.aim = null; mouse.down = false;
 }, { passive: false });
 
-// Level-up card click
+// Level-up card click (desktop — touch is handled in touchstart)
 canvas.addEventListener('click', e => {
   if (gameState !== 'LEVEL_UP') return;
-  const r    = canvas.getBoundingClientRect();
-  const cx   = e.clientX - r.left;
-  const cy   = e.clientY - r.top;
-  const cardW = 220, cardH = 140, gap = 18;
+  const r      = canvas.getBoundingClientRect();
+  const scaleX = W / r.width;
+  const scaleY = H / r.height;
+  const cx     = (e.clientX - r.left) * scaleX;
+  const cy     = (e.clientY - r.top)  * scaleY;
+  const cardW  = 220, cardH = 140, gap = 18;
   const startX = (W - (cardW * 3 + gap * 2)) / 2;
   for (let i = 0; i < levelUpChoices.length; i++) {
     const x = startX + i * (cardW + gap);

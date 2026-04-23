@@ -20,6 +20,13 @@ canvas {
   box-shadow: 0 0 24px #0ff, 0 0 60px #0ff3;
   display: block;
   cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  max-width: 100vw;
+}
+@media (max-width: 900px) {
+  canvas { width: 100vw !important; height: calc(100vw * 600 / 900) !important; }
+  body { align-items: flex-start; }
 }
 </style>
 </head>
@@ -165,7 +172,8 @@ let lastTime  = 0;
 
 const cam   = { x: 0, y: 0 };
 const keys  = {};
-const mouse = { x: W / 2, y: H / 2, down: false };
+const mouse     = { x: W / 2, y: H / 2, down: false };
+const touchState = { joy: null, aim: null };
 
 let bullets      = [];
 let enemies      = [];
@@ -404,6 +412,16 @@ function update(dt, now) {
   if (keys['ArrowUp']    || keys['w']) dy -= 1;
   if (keys['ArrowDown']  || keys['s']) dy += 1;
   if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+  if (touchState.joy) {
+    const jdx  = touchState.joy.curX - touchState.joy.startX;
+    const jdy  = touchState.joy.curY - touchState.joy.startY;
+    const dist = Math.hypot(jdx, jdy);
+    if (dist > 8) {
+      const norm = Math.min(dist, 50) / 50;
+      dx += (jdx / dist) * norm;
+      dy += (jdy / dist) * norm;
+    }
+  }
   player.x = Math.max(player.r, Math.min(WORLD_W - player.r, player.x + dx * player.speed));
   player.y = Math.max(player.r, Math.min(WORLD_H - player.r, player.y + dy * player.speed));
 
@@ -621,6 +639,24 @@ function draw(now) {
 
   ctx.restore();
 
+  // Virtual joystick (screen space)
+  if (touchState.joy) {
+    const { startX, startY, curX, curY } = touchState.joy;
+    const maxR  = 50;
+    const jdx   = curX - startX;
+    const jdy   = curY - startY;
+    const dist  = Math.hypot(jdx, jdy);
+    const clamp = Math.min(dist, maxR);
+    const ang   = Math.atan2(jdy, jdx);
+    const knobX = startX + Math.cos(ang) * clamp;
+    const knobY = startY + Math.sin(ang) * clamp;
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth   = 2;
+    ctx.beginPath(); ctx.arc(startX, startY, maxR, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.beginPath(); ctx.arc(knobX, knobY, 22, 0, Math.PI * 2); ctx.fill();
+  }
+
   // HUD (drawn in screen space, not world space)
   drawHUD(now);
 
@@ -780,7 +816,15 @@ function drawMenu() {
 
   ctx.fillStyle = '#aaa';
   ctx.font      = '8px "Press Start 2P", monospace';
-  const controls = [
+  const isMobile = 'ontouchstart' in window;
+  const controls = isMobile ? [
+    'LEFT THUMB  —  Move (joystick)',
+    'RIGHT THUMB —  Aim & Shoot',
+    '',
+    'Collect gems to level up.',
+    'Survive every wave.',
+    'Defeat bosses every 5 waves.',
+  ] : [
     'ARROWS / WASD  —  Move',
     'MOUSE          —  Aim',
     'LEFT CLICK     —  Shoot',
@@ -916,6 +960,53 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => { if (e.button === 0) mouse.down = true; });
 canvas.addEventListener('mouseup',   e => { if (e.button === 0) mouse.down = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Touch controls — left half = joystick, right half = aim & shoot
+function getTouchPos(t) {
+  const r      = canvas.getBoundingClientRect();
+  const scaleX = W / r.width;
+  const scaleY = H / r.height;
+  return { x: (t.clientX - r.left) * scaleX, y: (t.clientY - r.top) * scaleY };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const { x, y } = getTouchPos(t);
+    if (x < W / 2) {
+      touchState.joy = { id: t.identifier, startX: x, startY: y, curX: x, curY: y };
+    } else {
+      touchState.aim = { id: t.identifier };
+      mouse.x = x; mouse.y = y; mouse.down = true;
+    }
+  }
+  if (gameState === 'MENU') { gameState = 'PLAYING'; spawnWave(wave); }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const { x, y } = getTouchPos(t);
+    if (touchState.joy && t.identifier === touchState.joy.id) {
+      touchState.joy.curX = x; touchState.joy.curY = y;
+    }
+    if (touchState.aim && t.identifier === touchState.aim.id) {
+      mouse.x = x; mouse.y = y;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (touchState.joy && t.identifier === touchState.joy.id) touchState.joy = null;
+    if (touchState.aim && t.identifier === touchState.aim.id) { touchState.aim = null; mouse.down = false; }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', e => {
+  touchState.joy = null; touchState.aim = null; mouse.down = false;
+}, { passive: false });
 
 // Level-up card click
 canvas.addEventListener('click', e => {

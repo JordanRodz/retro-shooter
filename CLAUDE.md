@@ -39,6 +39,14 @@ All sound is synthesized at runtime via the Web Audio API — no audio files. `a
 
 `getWaveComposition(w)` returns counts per enemy type. Every 5th wave is a boss wave (`w % 5 === 0`) that includes one boss plus extra grunts and scouts. Enemy health/count scales linearly with wave number. Boss `health` is computed at spawn time using the current `wave` variable.
 
+### Touch / mobile controls
+
+`touchState` holds two slots: `joy` (left-half joystick) and `aim` (right-half shoot target). Both are `null` when inactive. Touch events are wired on the canvas with `{ passive: false }` so `e.preventDefault()` can suppress browser scrolling/zooming.
+
+`getTouchPos()` applies a scale factor (`canvas internal size / CSS rendered size`) so touch coordinates map correctly to game coordinates even when the canvas is CSS-scaled down on small screens. The joystick contributes additively to `dx/dy` in the movement block — keyboard and touch movement can overlap safely.
+
+The canvas uses `touch-action: none` (CSS) to block default gestures, and a `@media` query scales the canvas to full viewport width on screens narrower than 900px while preserving the 900×600 aspect ratio.
+
 ### Rendering order
 
 Back to front within the world-space transform: particles → gems → powerups → enemies (with health bars) → bullets → player. HUD and overlay screens (menu, level-up, wave clear, game over) are drawn after `ctx.restore()` in screen space so they are never affected by the camera transform.

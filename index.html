@@ -893,7 +893,8 @@ function drawLevelUp() {
 
     ctx.fillStyle = '#555';
     ctx.font      = '7px "Press Start 2P", monospace';
-    ctx.fillText(`[ ${i + 1} ]`, cx + cardW / 2, cy + cardH - 12);
+    const hint = 'ontouchstart' in window ? `[ TAP ZONE ${i + 1} ]` : `[ ${i + 1} ]`;
+    ctx.fillText(hint, cx + cardW / 2, cy + cardH - 12);
   }
 }
 
@@ -981,13 +982,8 @@ canvas.addEventListener('touchstart', e => {
       resetGame(); continue;
     }
     if (gameState === 'LEVEL_UP') {
-      const cardW = 220, cardH = 140, gap = 18;
-      const startX = (W - (cardW * 3 + gap * 2)) / 2;
-      for (let i = 0; i < levelUpChoices.length; i++) {
-        const cx = startX + i * (cardW + gap);
-        const cy = H / 2 - cardH / 2 + 10;
-        if (x >= cx && x <= cx + cardW && y >= cy && y <= cy + cardH) { applyUpgrade(i); break; }
-      }
+      const zone = Math.floor(x / (W / 3));
+      if (zone >= 0 && zone < levelUpChoices.length) applyUpgrade(zone);
       continue;
     }
     if (gameState === 'PLAYING') {

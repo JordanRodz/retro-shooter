@@ -12,7 +12,11 @@ The entire game lives in a single `index.html` file with inline CSS and JavaScri
 
 ### Game states
 
-The variable `gameState` drives everything. Valid values: `MENU` → `PLAYING` ↔ `LEVEL_UP` / `WAVE_CLEAR` → `GAME_OVER`. The `update()` function returns early for any state other than `PLAYING` and `WAVE_CLEAR`.
+The variable `gameState` drives everything. Valid values: `MENU` → `PLAYING` ↔ `LEVEL_UP` → `GAME_OVER`. The `update()` function returns early for any state other than `PLAYING`.
+
+`paused` (boolean) is a separate flag that gates `update()` without changing `gameState`. It is toggled by the `P` key or the on-screen PAUSE button and is reset to `false` on game reset.
+
+Wave transitions are seamless — when `enemies.length === 0`, the next wave spawns immediately and a `waveBanner` object (`{ alpha, line1, line2 }`) is set to fade out over 1.5 s. There is no `WAVE_CLEAR` pause state.
 
 ### Coordinate systems
 
@@ -30,6 +34,10 @@ Six mutable arrays hold live entities: `bullets`, `enemies`, `gems`, `powerups`,
 
 - `UPGRADE_POOL` (12 entries) — permanent stat changes applied to `player` at level-up. `triggerLevelUp()` splices 3 random entries from a copy of the pool and pauses the game.
 - `POWERUP_TYPES` (4 entries) — temporary or instant pickups that drop from enemies with 13% probability. Timed buffs use `addTimedBuff()` which pushes an entry into `activeEffects` with an `onRemove` callback.
+
+### Pause button
+
+`PAUSE_BTN = { x: W/2 - 30, y: 8, w: 60, h: 28 }` is a constant defining the clickable/tappable pause button centered at the top of the canvas. It is drawn inside `drawHUD()` only when `gameState === 'PLAYING'`. Click, touch, and `P` key all toggle `paused`. The button label switches between `PAUSE` and `RESUME`.
 
 ### Audio system
 

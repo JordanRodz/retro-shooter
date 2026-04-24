@@ -44,6 +44,8 @@ const H      = canvas.height = 600;
 const WORLD_W = 2400;
 const WORLD_H = 2400;
 
+const PAUSE_BTN = { x: W / 2 - 30, y: 8, w: 60, h: 28 };
+
 // ============================================================
 // AUDIO  (Web Audio API — no files needed, all synthesized)
 // ============================================================
@@ -163,12 +165,12 @@ function sfxGameOver() {
 // ============================================================
 // STATE
 // ============================================================
-let gameState = 'MENU'; // MENU | PLAYING | LEVEL_UP | WAVE_CLEAR | GAME_OVER
-let score     = 0;
-let wave      = 1;
-let waveTimer = 0;
-const WAVE_DELAY = 3000;
-let lastTime  = 0;
+let gameState  = 'MENU'; // MENU | PLAYING | LEVEL_UP | GAME_OVER
+let score      = 0;
+let wave       = 1;
+let lastTime   = 0;
+let paused     = false;
+let waveBanner = { alpha: 0, line1: '', line2: '' };
 
 const cam   = { x: 0, y: 0 };
 const keys  = {};
@@ -398,12 +400,10 @@ function circles(a, b) {
 // UPDATE
 // ============================================================
 function update(dt, now) {
-  if (gameState === 'WAVE_CLEAR') {
-    waveTimer -= dt;
-    if (waveTimer <= 0) { wave++; spawnWave(wave); gameState = 'PLAYING'; }
-    return;
-  }
-  if (gameState !== 'PLAYING') return;
+  if (paused || gameState !== 'PLAYING') return;
+
+  // Fade wave banner
+  if (waveBanner.alpha > 0) waveBanner.alpha = Math.max(0, waveBanner.alpha - dt / 1500);
 
   // --- Movement ---
   let dx = 0, dy = 0;
@@ -536,7 +536,15 @@ function update(dt, now) {
   particles = particles.filter(p => p.life > 0);
 
   // --- Wave clear ---
-  if (enemies.length === 0) { sfxWaveClear(); gameState = 'WAVE_CLEAR'; waveTimer = WAVE_DELAY; }
+  if (enemies.length === 0) {
+    sfxWaveClear();
+    const cleared = wave;
+    wave++;
+    spawnWave(wave);
+    waveBanner.alpha = 1;
+    waveBanner.line1 = `WAVE ${cleared} CLEAR!`;
+    waveBanner.line2 = `WAVE ${wave} INCOMING...`;
+  }
 }
 
 // ============================================================
@@ -660,10 +668,15 @@ function draw(now) {
   // HUD (drawn in screen space, not world space)
   drawHUD(now);
 
+  // Wave banner (non-pausing, fades out over 1.5s)
+  drawWaveBanner();
+
+  // Pause overlay
+  if (paused) drawPauseOverlay();
+
   // Overlays
   if (gameState === 'MENU')       drawMenu();
   if (gameState === 'LEVEL_UP')   drawLevelUp();
-  if (gameState === 'WAVE_CLEAR') drawWaveClear();
   if (gameState === 'GAME_OVER')  drawGameOver();
 }
 
@@ -799,6 +812,20 @@ function drawHUD(now) {
     ctx.fillText(`[${e.label}]`, bx, H - 10);
     bx += 80;
   }
+
+  // Pause button (only during gameplay)
+  if (gameState === 'PLAYING') {
+    const pb = PAUSE_BTN;
+    ctx.fillStyle   = paused ? '#ff0' : '#1a1a2e';
+    ctx.strokeStyle = paused ? '#ff0' : '#555';
+    ctx.lineWidth   = 1;
+    ctx.fillRect(pb.x, pb.y, pb.w, pb.h);
+    ctx.strokeRect(pb.x, pb.y, pb.w, pb.h);
+    ctx.fillStyle  = paused ? '#000' : '#ccc';
+    ctx.font       = '7px "Press Start 2P", monospace';
+    ctx.textAlign  = 'center';
+    ctx.fillText(paused ? 'RESUME' : 'PAUSE', pb.x + pb.w / 2, pb.y + pb.h / 2 + 3);
+  }
 }
 
 // --- Overlays ---
@@ -828,6 +855,7 @@ function drawMenu() {
     'ARROWS / WASD  —  Move',
     'MOUSE          —  Aim',
     'LEFT CLICK     —  Shoot',
+    'P              —  Pause',
     '',
     'Collect gems to level up.',
     'Survive every wave.',
@@ -898,19 +926,38 @@ function drawLevelUp() {
   }
 }
 
-function drawWaveClear() {
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(0, 0, W, H);
+function drawWaveBanner() {
+  if (waveBanner.alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = waveBanner.alpha;
+  ctx.fillStyle   = 'rgba(0,0,0,0.70)';
+  ctx.fillRect(W / 2 - 210, 74, 420, 72);
   ctx.textAlign   = 'center';
   ctx.fillStyle   = '#0f0';
   ctx.shadowColor = '#0f0';
   ctx.shadowBlur  = 14;
-  ctx.font        = '20px "Press Start 2P", monospace';
-  ctx.fillText('WAVE CLEAR!', W / 2, H / 2 - 20);
+  ctx.font        = '18px "Press Start 2P", monospace';
+  ctx.fillText(waveBanner.line1, W / 2, 108);
   ctx.shadowBlur  = 0;
   ctx.fillStyle   = '#aaa';
   ctx.font        = '9px "Press Start 2P", monospace';
-  ctx.fillText(`WAVE ${wave + 1} INCOMING...`, W / 2, H / 2 + 20);
+  ctx.fillText(waveBanner.line2, W / 2, 132);
+  ctx.restore();
+}
+
+function drawPauseOverlay() {
+  ctx.fillStyle   = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign   = 'center';
+  ctx.fillStyle   = '#fff';
+  ctx.shadowColor = '#0ff';
+  ctx.shadowBlur  = 20;
+  ctx.font        = '26px "Press Start 2P", monospace';
+  ctx.fillText('PAUSED', W / 2, H / 2 - 10);
+  ctx.shadowBlur  = 0;
+  ctx.fillStyle   = '#888';
+  ctx.font        = '8px "Press Start 2P", monospace';
+  ctx.fillText('PRESS P OR TAP PAUSE TO RESUME', W / 2, H / 2 + 28);
 }
 
 function drawGameOver() {
@@ -945,6 +992,7 @@ window.addEventListener('keydown', e => {
     spawnWave(wave);
   }
   if ((e.key === 'r' || e.key === 'R') && gameState === 'GAME_OVER') resetGame();
+  if ((e.key === 'p' || e.key === 'P') && gameState === 'PLAYING') paused = !paused;
   if (gameState === 'LEVEL_UP') {
     if (e.key === '1') applyUpgrade(0);
     if (e.key === '2') applyUpgrade(1);
@@ -987,11 +1035,17 @@ canvas.addEventListener('touchstart', e => {
       continue;
     }
     if (gameState === 'PLAYING') {
-      if (x < W / 2) {
-        touchState.joy = { id: t.identifier, startX: x, startY: y, curX: x, curY: y };
-      } else {
-        touchState.aim = { id: t.identifier };
-        mouse.x = x; mouse.y = y; mouse.down = true;
+      const pb = PAUSE_BTN;
+      if (x >= pb.x && x <= pb.x + pb.w && y >= pb.y && y <= pb.y + pb.h) {
+        paused = !paused; continue;
+      }
+      if (!paused) {
+        if (x < W / 2) {
+          touchState.joy = { id: t.identifier, startX: x, startY: y, curX: x, curY: y };
+        } else {
+          touchState.aim = { id: t.identifier };
+          mouse.x = x; mouse.y = y; mouse.down = true;
+        }
       }
     }
   }
@@ -1024,12 +1078,20 @@ canvas.addEventListener('touchcancel', e => {
 
 // Level-up card click (desktop — touch is handled in touchstart)
 canvas.addEventListener('click', e => {
-  if (gameState !== 'LEVEL_UP') return;
   const r      = canvas.getBoundingClientRect();
   const scaleX = W / r.width;
   const scaleY = H / r.height;
   const cx     = (e.clientX - r.left) * scaleX;
   const cy     = (e.clientY - r.top)  * scaleY;
+
+  if (gameState === 'PLAYING') {
+    const pb = PAUSE_BTN;
+    if (cx >= pb.x && cx <= pb.x + pb.w && cy >= pb.y && cy <= pb.y + pb.h) {
+      paused = !paused; return;
+    }
+  }
+
+  if (gameState !== 'LEVEL_UP') return;
   const cardW  = 220, cardH = 140, gap = 18;
   const startX = (W - (cardW * 3 + gap * 2)) / 2;
   for (let i = 0; i < levelUpChoices.length; i++) {
@@ -1048,6 +1110,8 @@ function resetGame() {
   powerups      = []; particles = []; activeEffects = [];
   score         = 0;
   wave          = 1;
+  paused        = false;
+  waveBanner    = { alpha: 0, line1: '', line2: '' };
   gameState     = 'PLAYING';
   spawnWave(wave);
 }
